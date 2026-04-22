@@ -1,0 +1,6 @@
+{
+  "name": "Developer Activity Widget",
+  "description": "An interactive developer activity widget displaying token consumption and GitHub contributions with live heatmaps and stats.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  
+  .font-mono {
+    font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glass aesthetics matching user screenshot with enhanced liquid transparency */
+.glass-panel {
+  background: radial-gradient(130% 120% at 50% -10%, rgba(255, 255, 255, 0.09) 0%, rgba(18, 25, 42, 0.42) 50%, rgba(8, 12, 20, 0.58) 100%);
+  backdrop-filter: blur(36px) saturate(210%);
+  -webkit-backdrop-filter: blur(36px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 
+    0 30px 70px -15px rgba(0, 0, 0, 0.85),
+    0 10px 25px -5px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 1.5px 0 0 rgba(255, 255, 255, 0.45) inset,
+    0 -1px 0 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.015) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset;
+}
+
+.liquid-sheen {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(255, 255, 255, 0) 65%
+  );
+}
+
+/* Tokens Mode Tiers (Electric Azure / Cobalt) */
+.tier-token-0 { fill: #0f1420; }
+.tier-token-1 { fill: #1a2b4c; }
+.tier-token-2 { fill: #254982; }
+.tier-token-3 { fill: #3168be; }
+.tier-token-4 { fill: #3b82f6; filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.65)); }
+
+/* GitHub Mode Tiers (Emerald / Mint) */
+.tier-gh-0 { fill: #0d151c; }
+.tier-gh-1 { fill: #0e4429; }
+.tier-gh-2 { fill: #006d32; }
+.tier-gh-3 { fill: #26a641; }
+.tier-gh-4 { fill: #39d353; filter: drop-shadow(0 0 4px rgba(57, 211, 83, 0.65)); }
+
+/* Heatmap cell transitions */
+.cell-rect {
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+
+.cell-rect:hover {
+  stroke: #ffffff;
+  stroke-width: 1px;
+  opacity: 0.95;
+}
+
