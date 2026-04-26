@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ViewMode, UserProfile } from './types';
 import { DEFAULT_PROFILES, generateHeatmapData } from './data/mockData';
+import { loadRealData } from './data/realData';
 import { ActivityWidget } from './components/ActivityWidget';
 import { WidgetControls } from './components/WidgetControls';
 import { EmbedModal } from './components/EmbedModal';
@@ -19,24 +20,42 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [isEmbedOpen, setIsEmbedOpen] = useState(false);
 
-  // Manual refresh handler
+  // Load REAL OpenCode history (collector/collect_opencode.py -> public/usage.json).
+  // Falls back to mock data when usage.json is unavailable.
+  const loadLive = useCallback(async () => {
+    const real = await loadRealData();
+    if (real) {
+      setProfiles([real.profile]);
+      setCurrentProfile(real.profile);
+      setHeatmapData(real.heatmap);
+      return true;
+    }
+    return false;
+  }, []);
+
+  useEffect(() => {
+    void loadLive();
+  }, [loadLive]);
+
+  // Manual refresh handler: re-read real data, fall back to a subtle nudge.
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-
-    // Simulate subtle activity updates
-    setTimeout(() => {
-      setCurrentProfile((prev) => ({
-        ...prev,
-        stats: {
-          ...prev.stats,
-          todayTokens: prev.stats.todayTokens + Math.floor(120_000 + Math.random() * 450_000),
-          todayCommits: prev.stats.todayCommits + (Math.random() > 0.6 ? 1 : 0),
-          totalYearCommits: prev.stats.totalYearCommits + 1,
-        },
-      }));
+    setTimeout(async () => {
+      const ok = await loadLive();
+      if (!ok) {
+        setCurrentProfile((prev) => ({
+          ...prev,
+          stats: {
+            ...prev.stats,
+            todayTokens: prev.stats.todayTokens + Math.floor(120_000 + Math.random() * 450_000),
+            todayCommits: prev.stats.todayCommits + (Math.random() > 0.6 ? 1 : 0),
+            totalYearCommits: prev.stats.totalYearCommits + 1,
+          },
+        }));
+      }
       setIsRefreshing(false);
     }, 600);
-  }, []);
+  }, [loadLive]);
 
   // Real-time live token streamer simulation
   useEffect(() => {
