@@ -7,6 +7,7 @@ writes:
   ../skin/@Resources/values.inc         Rainmeter variables
   ../skin/@Resources/heatmap.png        pre-rendered activity heatmap
 """
+from typing import Any
 import datetime as dt
 import json
 import os
@@ -24,7 +25,13 @@ RES_DIR = os.path.join(BASE, "skin", "OpenCodeWidget", "@Resources")
 DB_PATH = os.environ.get("OPENCODE_DB", r"C:\Users\bened\.local\share\opencode\opencode.db")
 AUTH_PATH = os.environ.get("OPENCODE_AUTH", r"C:\Users\bened\.local\share\opencode\auth.json")
 GO_USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
-WEEKS = 52  # heatmap span, like the concept (Oct -> Sept)
+# calendar-year heatmap (Jan -> Dec): grid starts on the Monday of the week
+# containing Jan 1, one column per week, days past Dec 31 are not rendered
+YEAR = dt.date.today().year
+YEAR_START = dt.date(YEAR, 1, 1)
+YEAR_END = dt.date(YEAR, 12, 31)
+GRID_MONDAY = YEAR_START - dt.timedelta(days=YEAR_START.weekday())
+GRID_COLS = ((YEAR_END - GRID_MONDAY).days + 1 + 6) // 7
 
 
 def fmt_tokens(n):
@@ -145,23 +152,24 @@ def go_quota():
         return {"ok": False, "error": type(e).__name__}
 
 
-BLUE = ("#141722", "#1a2c47", "#1e4579", "#2d6ac4", "#4f8cf5")
-GREEN = ("#10151c", "#0e4429", "#006d32", "#26a641", "#39d353")
+BLUE = ("#282828", "#458588", "#8ec07c", "#fabd2f", "#fe8019")
+GREEN = ("#282828", "#505a23", "#98971a", "#b8bb26", "#dce682")
 
 
 def render_heatmap(daily, path, palette=BLUE):
     from PIL import Image, ImageDraw, ImageFont
-    today = dt.date.today()
-    # start on Monday, WEEKS columns ending this week
-    end_monday = today - dt.timedelta(days=today.weekday())
-    start = end_monday - dt.timedelta(weeks=WEEKS - 1)
-    cells, months = {}, {}
-    for i in range(WEEKS * 7):
+    start = GRID_MONDAY
+    cells = {}
+    for i in range(GRID_COLS * 7):
         d = start + dt.timedelta(days=i)
+        if d > YEAR_END:
+            continue
         iso = f"{d.year}-{d.month:02d}-{d.day:02d}"
         cells[d] = daily.get(iso, 0)
-        if d.day <= 7:
-            months.setdefault(d.strftime("%b").upper(), i // 7)
+    months = {}
+    for m in range(1, 13):
+        first = dt.date(YEAR, m, 1)
+        months[first.strftime("%b").upper()] = (first - start).days // 7
     vals = sorted(v for v in cells.values() if v > 0)
     if vals:
         q = lambda p: vals[min(len(vals) - 1, int(p * len(vals)))]
@@ -170,7 +178,7 @@ def render_heatmap(daily, path, palette=BLUE):
         t1 = t2 = t3 = 1
     EMPTY, L1, L2, L3, L4 = palette
     S, G, TOP = 12, 4, 22  # cell size, gap, label strip (2x for retina-crisp scaling)
-    W, H = WEEKS * (S + G) - G, 7 * (S + G) - G + TOP
+    W, H = GRID_COLS * (S + G) - G, 7 * (S + G) - G + TOP
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     dr = ImageDraw.Draw(img)
     try:
@@ -179,22 +187,25 @@ def render_heatmap(daily, path, palette=BLUE):
         font = ImageFont.load_default()
     for label, col in months.items():
         dr.text((col * (S + G), 0), label, fill="#7d8590", font=font)
-    for i in range(WEEKS * 7):
+    for i in range(GRID_COLS * 7):
         d = start + dt.timedelta(days=i)
+        if d > YEAR_END:
+            continue
         v = cells[d]
-        c = EMPTY if v <= 0 else L1 if v <= t1 else L2 if v <= t2 else L3 if v <= t3 else L4
+        c: str | Any = EMPTY if v <= 0 else L1 if v <= t1 else L2 if v <= t2 else L3 if v <= t3 else L4
         x, y = (i // 7) * (S + G), TOP + (i % 7) * (S + G)
         dr.rounded_rectangle([x, y, x + S, y + S], radius=3, fill=c)
     img.save(path)
-    return start.isoformat(), today.isoformat()
+    return start.isoformat(), YEAR_END.isoformat()
 
 
 # ---- Rainmeter cell-grid contract (must match OpenCodeWidget.ini) ----
-# [Variables] must be the LAST section of the skin file so included cells
-# are defined after the background/panel (else they paint underneath it).
+# Calendar-year grid: GRID_COLS Monday-start columns covering Jan 1..Dec 31;
+# days past Dec 31 are not emitted. Included cells must be defined AFTER the
+# background/panel (else they paint underneath it).
 GRID_X, GRID_Y, CELL, GAP, LABEL_Y = 28, 172, 6, 2, 158
-TOK_COLORS = [(25, 30, 45), (50, 110, 220), (70, 150, 250), (100, 190, 255), (150, 215, 255)]
-GH_COLORS = [(22, 30, 28), (30, 150, 90), (50, 200, 110), (90, 230, 140), (150, 255, 180)]
+TOK_COLORS = [(40, 40, 40), (69, 133, 136), (142, 192, 124), (250, 189, 47), (254, 128, 25)]
+GH_COLORS = [(40, 40, 40), (80, 85, 35), (152, 151, 26), (184, 187, 38), (220, 225, 130)]
 
 
 def make_avatar():
@@ -226,8 +237,7 @@ def gen_cells_inc(per, gh_daily, path):
     Coordinates follow the GRID_* contract above.
     """
     today = dt.date.today()
-    end_monday = today - dt.timedelta(days=today.weekday())
-    start = end_monday - dt.timedelta(weeks=WEEKS - 1)
+    start = GRID_MONDAY
 
     def qtier(vals):
         # equal-frequency quartiles so each lit tier gets ~25% of active days
@@ -252,16 +262,17 @@ def gen_cells_inc(per, gh_daily, path):
 
     L = []
     idx = 0
-    last_m, last_mc = -1, -99
-    for col in range(WEEKS):
-        monday = start + dt.timedelta(days=col * 7)
-        if monday.month != last_m and col - last_mc >= 3:
-            L.append(f"[MH{monday:%b}{col}]\nMeter=String\nX={GRID_X + col * (CELL + GAP)}\n"
-                     f"Y={LABEL_Y}\nFontFace=Consolas\nFontSize=8\nFontColor=125,133,144\n"
-                     f"AntiAlias=1\nText={monday:%b}\n")
-            last_m, last_mc = monday.month, col
+    for m in range(1, 13):
+        first = dt.date(YEAR, m, 1)
+        col = (first - start).days // 7
+        L.append(f"[MH{m:02d}]\nMeter=String\nX={GRID_X + col * (CELL + GAP)}\n"
+                 f"Y={LABEL_Y}\nFontFace=Consolas\nFontSize=8\nFontColor=146,131,116\n"
+                 f"AntiAlias=1\nText={first:%b}\n")
+    for col in range(GRID_COLS):
         for row in range(7):
             d = start + dt.timedelta(days=col * 7 + row)
+            if d > YEAR_END:
+                continue
             x = GRID_X + col * (CELL + GAP)
             y = GRID_Y + row * (CELL + GAP)
             future = d > today
@@ -307,21 +318,71 @@ def main():
         lifetime = sum(v or 0 for v in (t["i"], t["o"], t["r"], t["cr"], t["cw"]))
         cur.execute("SELECT COUNT(*) n FROM message")
         messages = cur.fetchone()["n"]
-        cur.execute("SELECT date(time_created/1000,'unixepoch') d,"
-                    " SUM(tokens_input+tokens_output+tokens_reasoning+tokens_cache_read"
-                    "+tokens_cache_write) t, SUM(cost) c, COUNT(*) n"
-                    " FROM session GROUP BY d")
-        per = {r["d"]: {"tokens": r["t"] or 0, "cost": r["c"] or 0.0, "sessions": r["n"]} for r in cur.fetchall()}
-        days = sorted(dt.date.fromisoformat(d) for d in per)
+        # ---- TRUE per-day ledger from messages (exact: msg total == session
+        # total). Session time_created misattributes long-running sessions to
+        # their start day, so daily/streak/today figures come from here. ----
+        per = {}
+        cur.execute("SELECT session_id, time_created, data FROM message")
+        for r in cur.fetchall():
+            try:
+                m = json.loads(r["data"])
+            except Exception:
+                continue
+            tk = m.get("tokens") or {}
+            cc = tk.get("cache") or {}
+            mt = ((tk.get("input") or 0) + (tk.get("output") or 0)
+                  + (tk.get("reasoning") or 0) + (cc.get("read") or 0) + (cc.get("write") or 0))
+            d = dt.datetime.fromtimestamp(r["time_created"] / 1000).date().isoformat()
+            e = per.setdefault(d, {"tokens": 0, "cost": 0.0, "sessions": set(), "models": {}})
+            e["tokens"] += mt
+            e["sessions"].add(r["session_id"])
+            mid = f"{m.get('providerID') or '?'}/{m.get('modelID') or '?'}"
+            e["models"][mid] = e["models"].get(mid, 0) + mt
+        # session cost, split pro-rata across the days each session was active
+        cur.execute("SELECT id, date(time_created/1000,'unixepoch') d, cost FROM session")
+        sesrows = cur.fetchall()
+        cur.execute("SELECT session_id, time_created, data FROM message")
+        sesdays = {}
+        for r in cur.fetchall():
+            try:
+                tk = (json.loads(r["data"]).get("tokens") or {})
+                cc = tk.get("cache") or {}
+                mt = ((tk.get("input") or 0) + (tk.get("output") or 0)
+                      + (tk.get("reasoning") or 0) + (cc.get("read") or 0) + (cc.get("write") or 0))
+            except Exception:
+                mt = 0
+            dd = dt.datetime.fromtimestamp(r["time_created"] / 1000).date().isoformat()
+            sd = sesdays.setdefault(r["session_id"], {})
+            sd[dd] = sd.get(dd, 0) + mt
+        for s in sesrows:
+            c = s["cost"] or 0.0
+            if not c:
+                continue
+            dd = sesdays.get(s["id"], {})
+            tot = sum(dd.values())
+            if tot > 0:
+                for day, mt in dd.items():
+                    if day in per:
+                        per[day]["cost"] += c * mt / tot
+            elif s["d"] in per:
+                per[s["d"]]["cost"] += c
+        for v in per.values():
+            v["sessions"] = len(v["sessions"])
+        days = sorted(dt.date.fromisoformat(d) for d, v in per.items() if v["tokens"] > 0)
         current_streak, longest_streak = streaks(days)
         peak_day = max(per.items(), key=lambda kv: kv[1]["tokens"]) if per else ("-", {"tokens": 0})
         today_s = dt.date.today().isoformat()
-        today = per.get(today_s, {"tokens": 0, "cost": 0.0, "sessions": 0})
+        today = per.get(today_s, {"tokens": 0, "cost": 0.0, "sessions": 0, "models": {}})
         last7 = sum(v["tokens"] for k, v in per.items()
                     if (dt.date.today() - dt.date.fromisoformat(k)).days < 7)
         last30 = sum(v["tokens"] for k, v in per.items()
                      if (dt.date.today() - dt.date.fromisoformat(k)).days < 30)
         models = top_models(cur)
+        tmods = today.get("models", {})
+        if tmods:
+            today_model, today_model_tok = max(tmods.items(), key=lambda kv: kv[1])
+        else:
+            today_model, today_model_tok = None, 0
     finally:
         con.close()
         os.unlink(tmp)
@@ -379,20 +440,24 @@ def main():
         "models": models[:8],
         "daily": [{"date": k, "tokens": v["tokens"], "sessions": v["sessions"],
                    "cost": round(v["cost"], 2)} for k, v in sorted(per.items())],
-        "heatmap": {"start": heat_start, "end": heat_end, "weeks": WEEKS},
+        "heatmap": {"start": heat_start, "end": heat_end, "weeks": GRID_COLS},
         "goQuota": quota,
         "updatedAt": dt.datetime.now().isoformat(timespec="seconds"),
     }
     with open(os.path.join(DATA_DIR, "usage.json"), "w") as f:
         json.dump(data, f, indent=1)
 
-    # publish to the React widget so its Refresh button picks up live data
-    pub = os.path.join(BASE, "what-i-want", "CodeTracker-Widget", "public", "usage.json")
-    try:
-        with open(pub, "w") as f:
-            json.dump(data, f, indent=1)
-    except OSError:
-        pass
+    # publish to the React widget so its Refresh button picks up live data.
+    # First path covers this repo layout (desktop/ is a subfolder of the repo
+    # root); second covers the original workspace layout. Missing dirs skip
+    # silently.
+    for pub in (os.path.join(os.path.dirname(BASE), "public", "usage.json"),
+                os.path.join(BASE, "what-i-want", "CodeTracker-Widget", "public", "usage.json")):
+        try:
+            with open(pub, "w") as f:
+                json.dump(data, f, indent=1)
+        except OSError:
+            pass
 
     # single-file widget: embed data so it works by double-click (no server)
     tpl_path = os.path.join(BASE, "web", "template.html")
@@ -433,8 +498,11 @@ LongestStreak={longest_streak}
 ActiveDays={len(days)}
 Sessions={t['n']}
 TopModel={top}
+TodayModel={today_model or top}
+TodayModelFmt={fmt_tokens(today_model_tok) if today_model else (fmt_tokens(models[0]['tokens']) if models else '0')}
 UpdatedAt={data['updatedAt']}
 UpdatedTime={dt.datetime.now().strftime('%H:%M')}
+TotalCost={(t['c'] or 0.0):.2f}
 """
     with open(os.path.join(RES_DIR, "values.inc"), "w") as f:
         f.write(inc)
@@ -450,5 +518,3 @@ UpdatedTime={dt.datetime.now().strftime('%H:%M')}
 
 if __name__ == "__main__":
     main()
-
-
